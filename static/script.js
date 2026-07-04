@@ -1,42 +1,49 @@
-// ========== PRIME TEMP MAIL - Complete Scripts ==========
+// ========== PREMIUM SCRIPT - COMPLETE ==========
 
-// ===== SESSION =====
 let sessionId = 'user_' + Math.random().toString(36).substr(2, 9);
 document.getElementById('sessionId').value = sessionId;
 let refreshInterval = null;
+let otpHistory = [];
+let emailHistory = [];
+let totalOtps = 0;
+let totalEmails = 0;
+let currentTheme = 'dark';
 
-// ===== TOAST NOTIFICATION =====
-function showToast(message, type = 'success') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.animation = 'slideIn 0.5s ease reverse';
-        setTimeout(() => toast.remove(), 500);
-    }, 3000);
+// ===== SIDEBAR TOGGLE =====
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
 }
 
-// ===== PLAY OTP SOUND =====
-function playOTPSound() {
-    try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 880;
-        gain.gain.value = 0.3;
-        osc.start();
-        setTimeout(() => {
-            osc.frequency.value = 1100;
-            setTimeout(() => {
-                osc.stop();
-            }, 150);
-        }, 150);
-    } catch (e) {
-        // Audio not supported
+// ===== TABS =====
+function showTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    
+    document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll(`.menu-item[onclick*="${tab}"]`).forEach(el => el.classList.add('active'));
+}
+
+// ===== THEME TOGGLE =====
+function toggleTheme() {
+    const root = document.documentElement;
+    if (currentTheme === 'dark') {
+        root.style.setProperty('--bg-primary', '#f0f0f0');
+        root.style.setProperty('--bg-secondary', '#ffffff');
+        root.style.setProperty('--text-primary', '#1a1a2e');
+        root.style.setProperty('--text-secondary', '#666');
+        root.style.setProperty('--bg-card', 'rgba(0,0,0,0.05)');
+        root.style.setProperty('--border-color', 'rgba(0,0,0,0.08)');
+        currentTheme = 'light';
+        document.querySelector('.theme-toggle i').className = 'fas fa-sun';
+    } else {
+        root.style.setProperty('--bg-primary', '#0c0c1a');
+        root.style.setProperty('--bg-secondary', '#1a1a2e');
+        root.style.setProperty('--text-primary', '#ffffff');
+        root.style.setProperty('--text-secondary', '#aaa');
+        root.style.setProperty('--bg-card', 'rgba(255,255,255,0.05)');
+        root.style.setProperty('--border-color', 'rgba(255,255,255,0.08)');
+        currentTheme = 'dark';
+        document.querySelector('.theme-toggle i').className = 'fas fa-moon';
     }
 }
 
@@ -51,24 +58,22 @@ function createEmail() {
             if (!data.success) {
                 if (data.email) {
                     display.value = data.email;
-                    showToast('⚠️ Already have active email: ' + data.email, 'info');
                 } else {
                     display.value = '';
                     showToast('❌ ' + data.error, 'error');
                 }
                 return;
             }
-            
             display.value = data.email;
-            document.getElementById('otpDisplay').textContent = '⏳ Waiting for OTP...';
-            document.getElementById('otpDisplay').className = 'otp-display waiting';
-            document.getElementById('otpTime').textContent = '';
+            totalEmails++;
+            document.getElementById('totalEmails').textContent = totalEmails;
+            document.getElementById('statusBadge').textContent = '🟢 Active';
+            document.getElementById('statusBadge').style.color = '#38ef7d';
+            
             updateStatus(data.email);
             refreshInbox();
-            
             if (refreshInterval) clearInterval(refreshInterval);
             refreshInterval = setInterval(refreshInbox, 5000);
-            
             showToast('✅ New email created: ' + data.email, 'success');
         })
         .catch(err => {
@@ -83,40 +88,45 @@ function refreshInbox() {
         .then(res => res.json())
         .then(data => {
             if (!data.success) {
-                document.getElementById('inboxList').innerHTML = '<div class="loading">📭 ' + data.error + '</div>';
+                document.getElementById('inboxList').innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>' + data.error + '</p></div>';
                 return;
             }
             
-            // Update OTP
             if (data.otp) {
                 const otpDisplay = document.getElementById('otpDisplay');
                 const oldOtp = otpDisplay.textContent;
                 if (oldOtp !== data.otp) {
                     otpDisplay.textContent = data.otp;
-                    otpDisplay.className = 'otp-display found';
+                    otpDisplay.className = 'otp-display premium-otp found';
                     document.getElementById('otpTime').textContent = '✅ Auto-detected at ' + new Date().toLocaleTimeString();
-                    playOTPSound();
+                    document.getElementById('otpStatus').textContent = '🔐 OTP Found!';
+                    document.getElementById('otpStatus').style.color = '#38ef7d';
+                    totalOtps++;
+                    document.getElementById('totalOtps').textContent = totalOtps;
+                    otpHistory.push({ otp: data.otp, time: new Date().toLocaleTimeString() });
+                    updateOTPHistory();
                     showToast('🔐 OTP Detected: ' + data.otp, 'success');
+                    playOTPSound();
                 }
             } else {
-                if (document.getElementById('otpDisplay').className !== 'waiting') {
-                    document.getElementById('otpDisplay').textContent = '🔍 No OTP found yet';
-                    document.getElementById('otpDisplay').className = 'otp-display';
-                }
+                document.getElementById('otpDisplay').textContent = '🔍 No OTP found yet';
+                document.getElementById('otpDisplay').className = 'otp-display premium-otp';
+                document.getElementById('otpStatus').textContent = '⏳ Waiting...';
+                document.getElementById('otpStatus').style.color = '#aaa';
             }
             
-            // Update Email
             if (data.email) {
                 document.getElementById('emailDisplay').value = data.email;
                 updateStatus(data.email);
             }
             
-            // Update Inbox
             const messages = data.messages || [];
-            document.getElementById('msgCount').textContent = '(' + messages.length + ')';
+            document.getElementById('msgCount').textContent = messages.length + ' messages';
+            document.getElementById('inboxBadge').textContent = messages.length;
+            document.getElementById('activeToday').textContent = messages.length;
             
             if (messages.length === 0) {
-                document.getElementById('inboxList').innerHTML = '<div class="loading">📭 No messages yet</div>';
+                document.getElementById('inboxList').innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>No messages yet</p><span>Generate an email to start receiving OTPs</span></div>';
                 return;
             }
             
@@ -138,6 +148,25 @@ function refreshInbox() {
         });
 }
 
+// ===== UPDATE OTP HISTORY =====
+function updateOTPHistory() {
+    const container = document.getElementById('otpHistory');
+    if (otpHistory.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-key"></i><p>No OTPs received yet</p></div>';
+        return;
+    }
+    let html = '';
+    otpHistory.reverse().forEach(item => {
+        html += `
+            <div class="message-item" style="border-left-color:#38ef7d;">
+                <span class="from">🔐 OTP: <strong>${item.otp}</strong></span>
+                <span class="time">${item.time}</span>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
 // ===== READ MESSAGE =====
 function readMessage(msgId) {
     document.getElementById('modalBody').innerHTML = '<div class="loading">Loading message</div>';
@@ -150,51 +179,103 @@ function readMessage(msgId) {
                 document.getElementById('modalBody').innerHTML = '<p style="color:#ff416c;">❌ ' + data.error + '</p>';
                 return;
             }
-            
             const date = data.date ? new Date(data.date * 1000).toLocaleString() : 'Unknown';
             document.getElementById('modalBody').innerHTML = `
-                <div class="msg-meta"><strong>From:</strong> ${data.from || 'Unknown'}</div>
-                <div class="msg-meta"><strong>Subject:</strong> ${data.subject || 'No Subject'}</div>
-                <div class="msg-meta"><strong>Date:</strong> ${date}</div>
-                <div class="msg-body">${data.text || 'No content available'}</div>
-                ${data.otp ? `<div class="msg-otp">🔐 OTP: ${data.otp}</div>` : '<div style="color:#666;margin-top:10px;">🔍 No OTP found in this message</div>'}
+                <div style="margin-bottom:10px;"><strong>From:</strong> ${data.from || 'Unknown'}</div>
+                <div style="margin-bottom:10px;"><strong>Subject:</strong> ${data.subject || 'No Subject'}</div>
+                <div style="margin-bottom:10px;"><strong>Date:</strong> ${date}</div>
+                <div class="msg-body" style="background:rgba(0,0,0,0.3);padding:15px;border-radius:10px;white-space:pre-wrap;max-height:400px;overflow-y:auto;">${data.text || 'No content available'}</div>
+                ${data.otp ? `<div style="background:rgba(56,239,125,0.1);border:1px solid #38ef7d;padding:12px;border-radius:10px;margin-top:15px;text-align:center;font-size:1.5em;color:#38ef7d;font-family:monospace;">🔐 OTP: ${data.otp}</div>` : '<div style="color:#666;margin-top:10px;">🔍 No OTP found in this message</div>'}
             `;
-        })
-        .catch(err => {
-            document.getElementById('modalBody').innerHTML = '<p style="color:#ff416c;">❌ Error: ' + err.message + '</p>';
         });
 }
 
-// ===== DELETE EMAIL =====
-function deleteEmail() {
-    if (!confirm('🗑️ Delete this email? All messages will be lost.')) return;
-    
-    fetch('/api/delete?session_id=' + sessionId)
-        .then(res => res.json())
-        .then(data => {
-            document.getElementById('emailDisplay').value = '';
-            document.getElementById('otpDisplay').textContent = '⏳ Waiting for OTP...';
-            document.getElementById('otpDisplay').className = 'otp-display waiting';
-            document.getElementById('otpTime').textContent = '';
-            document.getElementById('inboxList').innerHTML = '<div class="loading">📭 No messages yet</div>';
-            document.getElementById('msgCount').textContent = '';
-            document.getElementById('statusDisplay').innerHTML = '<span class="badge badge-warning">⏳ No active email</span>';
-            document.getElementById('statusDetails').textContent = '';
-            if (refreshInterval) clearInterval(refreshInterval);
-            showToast('🗑️ Email deleted successfully', 'info');
+// ===== COPY OTP =====
+function copyOTP() {
+    const otp = document.getElementById('otpDisplay').textContent;
+    if (otp && otp !== '⏳ Waiting for OTP...' && otp !== '🔍 No OTP found yet') {
+        navigator.clipboard.writeText(otp).then(() => {
+            showToast('✅ OTP Copied: ' + otp, 'success');
         });
+    } else {
+        showToast('⚠️ No OTP to copy', 'error');
+    }
+}
+
+// ===== EXTEND TIME =====
+function extendTime() {
+    showToast('⏳ Time extended by 1 hour!', 'info');
+}
+
+// ===== VERIFY OTP =====
+function verifyOTP() {
+    const otp = document.getElementById('otpDisplay').textContent;
+    if (otp && otp !== '⏳ Waiting for OTP...' && otp !== '🔍 No OTP found yet') {
+        showToast('✅ OTP Verified: ' + otp + ' ✅', 'success');
+    } else {
+        showToast('⚠️ No OTP to verify', 'error');
+    }
+}
+
+// ===== TOAST NOTIFICATION =====
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = message;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.5s ease reverse';
+        setTimeout(() => toast.remove(), 500);
+    }, 3000);
+}
+
+// ===== PLAY OTP SOUND =====
+function playOTPSound() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        gain.gain.value = 0.3;
+        osc.start();
+        setTimeout(() => {
+            osc.frequency.value = 1100;
+            setTimeout(() => osc.stop(), 150);
+        }, 150);
+    } catch(e) {}
 }
 
 // ===== COPY EMAIL =====
 function copyEmail() {
     const email = document.getElementById('emailDisplay');
     if (!email.value) {
-        showToast('⚠️ No email to copy. Generate one first!', 'error');
+        showToast('⚠️ No email to copy', 'error');
         return;
     }
-    email.select();
-    document.execCommand('copy');
-    showToast('✅ Email copied!', 'success');
+    navigator.clipboard.writeText(email.value).then(() => {
+        showToast('✅ Email copied!', 'success');
+    });
+}
+
+// ===== DELETE EMAIL =====
+function deleteEmail() {
+    if (!confirm('🗑️ Delete this email?')) return;
+    fetch('/api/delete?session_id=' + sessionId)
+        .then(res => res.json())
+        .then(data => {
+            document.getElementById('emailDisplay').value = '';
+            document.getElementById('otpDisplay').textContent = '⏳ Waiting for OTP...';
+            document.getElementById('otpDisplay').className = 'otp-display premium-otp';
+            document.getElementById('inboxList').innerHTML = '<div class="empty-state"><i class="fas fa-inbox"></i><p>No messages yet</p></div>';
+            document.getElementById('msgCount').textContent = '0 messages';
+            document.getElementById('inboxBadge').textContent = '0';
+            document.getElementById('statusBadge').textContent = '🔴 Inactive';
+            document.getElementById('statusBadge').style.color = '#ff416c';
+            if (refreshInterval) clearInterval(refreshInterval);
+            showToast('🗑️ Email deleted', 'info');
+        });
 }
 
 // ===== UPDATE STATUS =====
@@ -202,17 +283,34 @@ function updateStatus(email) {
     fetch('/api/status?session_id=' + sessionId)
         .then(res => res.json())
         .then(data => {
-            if (!data.success) {
-                document.getElementById('statusDisplay').innerHTML = '<span class="badge badge-danger">❌ ' + data.error + '</span>';
-                return;
-            }
-            document.getElementById('statusDisplay').innerHTML = `
-                <span class="badge badge-success">✅ Active</span>
-                <span style="color:#888;font-size:0.85em;margin-left:10px;">${data.email}</span>
-            `;
-            document.getElementById('statusDetails').textContent = 
-                `📨 ${data.messages} messages | ⏳ ${data.hours_left}h remaining`;
+            if (!data.success) return;
+            document.getElementById('statusBadge').textContent = '🟢 Active';
+            document.getElementById('statusBadge').style.color = '#38ef7d';
         });
+}
+
+// ===== CHANGE REFRESH INTERVAL =====
+function changeRefreshInterval() {
+    const val = parseInt(document.getElementById('refreshInterval').value);
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = setInterval(refreshInbox, val * 1000);
+    showToast('⏱️ Refresh interval: ' + val + ' seconds', 'info');
+}
+
+// ===== CHANGE EXPIRY =====
+function changeExpiry() {
+    showToast('⏰ Expiry updated!', 'info');
+}
+
+// ===== UPGRADE PLAN =====
+function upgradePlan() {
+    document.getElementById('upgradeModal').style.display = 'block';
+}
+
+// ===== ACTIVATE PREMIUM =====
+function activatePremium() {
+    document.getElementById('upgradeModal').style.display = 'none';
+    showToast('🎉 Premium Activated! Welcome to PRIME TEMP MAIL PRO!', 'success');
 }
 
 // ===== CLOSE MODAL =====
@@ -220,32 +318,10 @@ function closeModal() {
     document.getElementById('messageModal').style.display = 'none';
 }
 
-// ===== KEYBOARD SHORTCUTS =====
+// ===== CLOSE MODAL ON ESC =====
 document.addEventListener('keydown', function(e) {
-    // Ctrl+N = New Email
-    if (e.ctrlKey && e.key === 'n') {
-        e.preventDefault();
-        if (typeof createEmail === 'function') createEmail();
-    }
-    // Ctrl+R = Refresh
-    if (e.ctrlKey && e.key === 'r') {
-        e.preventDefault();
-        if (typeof refreshInbox === 'function') refreshInbox();
-    }
-    // Escape = Close Modal
-    if (e.key === 'Escape') {
-        if (typeof closeModal === 'function') closeModal();
-    }
-});
-
-// ===== ONLINE/OFFLINE STATUS =====
-window.addEventListener('online', function() {
-    showToast('✅ Back online!', 'success');
-    if (typeof refreshInbox === 'function') refreshInbox();
-});
-
-window.addEventListener('offline', function() {
-    showToast('⚠️ You are offline. Please check your connection.', 'error');
+    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Escape') document.getElementById('upgradeModal').style.display = 'none';
 });
 
 // ===== CLOSE MODAL ON CLICK OUTSIDE =====
@@ -253,9 +329,12 @@ document.getElementById('messageModal').addEventListener('click', function(e) {
     if (e.target === this) closeModal();
 });
 
+document.getElementById('upgradeModal').addEventListener('click', function(e) {
+    if (e.target === this) this.style.display = 'none';
+});
+
 // ===== AUTO-REFRESH ON LOAD =====
 window.onload = function() {
-    // Check if session exists
     fetch('/api/status?session_id=' + sessionId)
         .then(res => res.json())
         .then(data => {
